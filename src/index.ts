@@ -1,8 +1,10 @@
 import { KinesisStreamEvent } from 'aws-lambda';
 import axios from 'axios';
 import { BookingCompletedEvent, TransformedEvent } from './types';
+import { EventEmitter } from 'events';
 
 const PUBLISH_URL = process.env.PUBLISH_URL || 'http://localhost:3000';
+const eventEmitter = new EventEmitter();
 
 export const handler = async (event: KinesisStreamEvent) => {
   if (!PUBLISH_URL) {
@@ -26,15 +28,22 @@ export const handler = async (event: KinesisStreamEvent) => {
         product_provider_buyer: parsedEvent.booking_completed.product_provider,
       };
 
-      try {
-        const response = await axios.post(PUBLISH_URL, transformedEvent);
-        console.log(`Event published successfully: ${response.status}`);
-      } catch (error: any) {
-        console.error(`Failed to publish event: ${error.message}`, {
-          error,
-          transformedEvent,
-        });
-      }
+      eventEmitter.emit('booking_completed', transformedEvent);
     }
   }
 };
+
+eventEmitter.on(
+  'booking_completed',
+  async (transformedEvent: TransformedEvent) => {
+    try {
+      const response = await axios.post(PUBLISH_URL, transformedEvent);
+      console.log(`Event published successfully: ${response.status}`);
+    } catch (error: any) {
+      console.error(`Failed to publish event: ${error.message}`, {
+        error,
+        transformedEvent,
+      });
+    }
+  }
+);
